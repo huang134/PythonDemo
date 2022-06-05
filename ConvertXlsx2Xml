@@ -1,0 +1,90 @@
+#!/usr/bin/python3
+
+# param1 D:\Code\Component\MFMemberCore\MFMemberCore_dev\output\Release\Member\language                         xml文件目录
+# param2 1.xlsx                                                                                                 翻译文件
+# param3 Thai                                                                                                   待翻译的语言类型，需要和翻译文件的列名称一致
+# "args": ["D:\Code\Component\MFMemberCore\MFMemberCore_dev\output\Release\Member\language", "1.xlsx", "Thai"]
+# 根据xml文件生成xlsx文件
+
+import os
+import shutil
+import sys
+import pandas as pd
+from xml.etree.cElementTree import parse
+
+# 多语言字典 <sourceText, <languageType, translatedText>>
+languageDict = dict()
+
+# 读取文件生成字典
+def generateLanguageDict(translatedDocIn, languageDictInOut):
+    df = pd.ExcelFile(translatedDocIn)
+
+    for sheet in df.sheet_names:
+        sdf = pd.read_excel(translatedDocIn, sheet)
+
+        # print(sdf.columns)
+        for indexTmp in sdf.index:
+            i = 0
+            source = ""
+            dictTmp = dict()
+            for columnTmp in sdf.columns:
+                # 需要先找到源文本
+                if (-1 != columnTmp.lower().find('source') or -1 != columnTmp.lower().find('english') or -1 != columnTmp.lower().find('英语')) and (0 == len(str(source).strip())):
+                    source = sdf.loc[indexTmp].values[i]
+                    # print(i, "source = ", source)
+                elif (len(str(source).strip()) != 0):
+                    dictTmp[columnTmp] = sdf.loc[indexTmp].values[i]
+                    # print(i, columnTmp, sdf.loc[indexTmp].values[i])
+                i += 1
+            # print(dictTmp)
+
+            languageDictInOut[source] = dictTmp
+        break
+
+    # print(languageDictIn)
+
+# 根据字典生成xml文件
+def generateXml(languageDictIn, xmlFileDirIn, lstProcess):
+    # 拷贝英文源文件
+    for languageType in lstProcess:
+        dstXmlFile = os.path.split(os.path.realpath(__file__))[0] + "/" + languageType + ".xml"
+        shutil.copyfile(xmlFileDirIn + "/English.xml", dstXmlFile)
+
+        doc = parse(dstXmlFile)
+        root = doc.getroot()
+        for context in root:
+            for message in context:
+                sourceMatch = ""
+                for nodeTmp in message:
+                    if -1 != nodeTmp.tag.find('source'):
+                        if nodeTmp.text in languageDictIn and languageType in languageDictIn[nodeTmp.text]:
+                            sourceMatch = languageDictIn[nodeTmp.text][languageType]
+                    elif -1 != nodeTmp.tag.find('translation') and len(sourceMatch) != 0:
+                        nodeTmp.text = sourceMatch
+                        if 'type' in nodeTmp.attrib:
+                            nodeTmp.attrib.pop('type')
+        doc.write(dstXmlFile, 'UTF-8')
+
+# 将xlsx文件转换成xml文件
+def convertXlsx2Xml():
+    if 0:
+        if len(sys.argv) < 4:
+            print('parameter input error')
+            return
+
+        xmlFileDir = sys.argv[1]
+        translatedDoc = sys.argv[2]
+        toProcessList = sys.argv[3]
+    else:
+        xmlFileDir = os.path.split(os.path.realpath(__file__))[0] + "/../../output/Release/Member/language"
+        translatedDoc = "d:\Code\Component\MFMemberCore\MFMemberCore_dev\scripts\TranslationProcess\member_translate.xlsx"
+        toProcessList = "Chinese"
+
+    lstProcess = toProcessList.split(',')
+
+    generateLanguageDict(translatedDoc, languageDict)
+
+    generateXml(languageDict, xmlFileDir, lstProcess)
+
+if __name__ == "__main__":
+    convertXlsx2Xml()

@@ -1,0 +1,73 @@
+#!/usr/bin/python3
+
+# param1 D:\Code\Component\MFMemberCore\MFMemberCore_dev\output\Release\Member\language                             xml文件目录
+# "args": ["D:\Code\Component\MFMemberCore\MFMemberCore_dev\output\Release\Member\language"]
+# 根据xml文件生成xlsx文件
+
+import os
+import sys
+import pandas as pd
+from xml.etree.cElementTree import parse
+
+# 多语言字典 <languageType, <sourceText, translatedText>>
+languageDict = dict()
+
+# 读取文件生成字典
+def generateLanguageDict(xmlFileDirIn, languageDictInOut):
+    g = os.walk(xmlFileDirIn)
+    for path, dir_list, file_list in g:
+        for xml_file in file_list:
+            # print(os.path.join(path, xml_file))
+            languageType = xml_file.split('.')[0]
+            dictTmp = dict()
+            doc = parse(os.path.join(path, xml_file))
+            root = doc.getroot()
+            for context in root:
+                for message in context:
+                    sourceTmp = ""
+                    for nodeTmp in message:
+                        if -1 != nodeTmp.tag.find('source'):
+                            sourceTmp = nodeTmp.text
+                        elif -1 != nodeTmp.tag.find('translation'):
+                            dictTmp[sourceTmp] = nodeTmp.text
+            languageDictInOut[languageType] = dictTmp
+
+        # print(languageDictIn)
+
+# 根据字典生成xlsx
+def generateXlsx(languageDictIn):
+    data = dict()
+    sourceArray = []
+    first = True
+    for languageType, translateInfo in languageDictIn.items():
+        translateArray = []
+        for sourceText, translateText in translateInfo.items():
+            if first:
+                sourceArray.append(sourceText)
+            translateArray.append(translateText)
+
+        if first:
+            data["Source"] = sourceArray
+            first = False
+
+        data[languageType] = translateArray
+
+    # print(data)
+
+    df = pd.DataFrame(data)
+    df.to_excel(os.path.split(os.path.realpath(__file__))[0] + "/member_translate.xlsx", index=False)
+
+# 将xml文件转换成xlsx文件
+def convertXml2Xlsx():
+    xmlFileDir = "/../../output/Release/Member/language"
+    xmlFileDir = os.path.split(os.path.realpath(__file__))[0] + xmlFileDir
+
+    if len(sys.argv) == 2:
+        xmlFileDir = sys.argv[1]
+
+    generateLanguageDict(xmlFileDir, languageDict)
+
+    generateXlsx(languageDict)
+
+if __name__ == "__main__":
+    convertXml2Xlsx()
